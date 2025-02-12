@@ -18,15 +18,13 @@ to send to functions within our different classes.
 # Define the dimensions of screen object(width,height)
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
-#details for our game window
+# details for our game window
 pygame.display.set_caption('Elevator Challenge')
 screen.fill(WHITE)
 
-#setting framerate and game clock
+# setting framerate and game clock
 clock = pygame.time.Clock()
 pygame.time.Clock.tick(clock, 60)
-
-
 
 # Update the display using flip
 building = Building(TOTAL_FLOORS, NUMBER_OF_ELEVATORS)
@@ -35,8 +33,7 @@ building.draw(screen)
 
 pygame.display.flip()
 
-
-#at some point...
+# at some point...
 
 
 # # maybe some more stuff...
@@ -63,6 +60,3 @@ while running:
             # if button.collidepoint(pos):
             #     here call elevator add to queue
             # return
-
-
-
