@@ -1,62 +1,50 @@
-import pygame.time
-
 from config import *
 from Building import *
 
-"""
-
-After running the code, the user will see the building that includes
-the floors, elevators, and elevator controls.
-
-The number of floors and the number of elevators in the building must
-be easily defined/changed (by changing settings in the code or a configuration file).
-
-Utilize pygame library to build our world, screen, and capture events within the world
-to send to functions within our different classes.
-"""
-
-# Define the dimensions of screen object(width,height)
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-
-# details for our game window
-pygame.display.set_caption('Elevator Challenge')
-screen.fill(WHITE)
-
-# setting framerate and game clock
+pygame.init()
 clock = pygame.time.Clock()
-pygame.time.Clock.tick(clock, 60)
 
-# Update the display using flip
-building = Building(TOTAL_FLOORS, NUMBER_OF_ELEVATORS)
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption('Elevator Challenge')
 
-building.draw(screen)
+canvas_height = max(MARGIN * 2 + TOTAL_FLOORS * FLOOR_HEIGHT, SCREEN_HEIGHT)
+canvas = pygame.Surface((SCREEN_WIDTH, canvas_height))
+pygame.mixer.music.load(ELEVATOR_DING_PATH)
 
-pygame.display.flip()
+scroll_speed = 20
+scroll_y = canvas_height - SCREEN_HEIGHT
 
-# at some point...
+building = Building(TOTAL_FLOORS, NUMBER_OF_ELEVATORS, canvas)
 
-
-# # maybe some more stuff...
-#
-building.draw(screen)
-
-# Variable to keep our game loop running
 running = True
 
 # game loop
 while running:
-
     # for loop through the event queue
     for event in pygame.event.get():
-
         # Check for QUIT event
         if event.type == pygame.QUIT:
             running = False
         # Check for mouse clicking on floor buttons
-        if event.type == pygame.mouse.get_pressed():
+        if event.type == pygame.MOUSEBUTTONDOWN:
             ## if mouse is pressed get position of cursor ##
-            pos = pygame.mouse.get_pos()
-            ## check if cursor is on button ##
-            # if button.collidepoint(pos):
-            #     here call elevator add to queue
-            # return
+            if event.button == LEFT_MOUSE_BUTTON:
+                pos = pygame.mouse.get_pos()
+                print(f"mouse pressed {pos}")
+                x, y = pos
+                pos = x, y + scroll_y
+                building.check_calls(pos)
+            elif event.button == WHEEL_UP:
+                scroll_y -= scroll_speed
+            elif event.button == WHEEL_DOWN:
+                scroll_y += scroll_speed
+
+            # bound scroll y
+            scroll_y = max(0, min(canvas_height - SCREEN_HEIGHT, scroll_y))
+
+    clock.tick(FPS)
+    canvas.fill(WHITE)
+    building.draw(canvas)
+    building.update(canvas)
+    screen.blit(canvas, (0, -scroll_y))
+    pygame.display.flip()

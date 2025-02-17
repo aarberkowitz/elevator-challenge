@@ -1,75 +1,81 @@
+import pygame
+
 from config import *
 from Elevator import *
 from Floor import *
+
 """
 After running the code, the user will see the building that
 includes the floors, elevators, and elevator controls.
 """
-#getting our object assets
-elevator_image = pygame.image.load(ELEVATOR_IMG_PATH)
-floor_image = pygame.image.load(FLOOR_IMG_PATH)
 
 
-#PLACEHOLDER needs to be replaced with whatever should go in self for respective class
+def set_up_images():
+    elevator_image = pygame.transform.scale(pygame.image.load(ELEVATOR_IMG_PATH), ELEVATOR_SIZE)
+    floor_image = pygame.image.load(FLOOR_IMG_PATH)
+    floor_image = floor_image.subsurface(pygame.Rect(0, 0, FLOOR_LENGTH * 2, FLOOR_HEIGHT * 2))
+    scaled_floor_image = pygame.transform.scale(floor_image, (FLOOR_LENGTH, FLOOR_HEIGHT))
+    top_floor_image = scaled_floor_image.copy()
+    pygame.draw.rect(scaled_floor_image, BLACK, pygame.Rect(0, 0, FLOOR_LENGTH, BORDER_PIXEL_WIDTH))
+    pygame.draw.rect(top_floor_image, WHITE, pygame.Rect(0, 0, FLOOR_LENGTH, BORDER_PIXEL_WIDTH))
+    return elevator_image, scaled_floor_image, top_floor_image
 
 
 class Building:
-    def __init__(self, floors=TOTAL_FLOORS, elevators=NUMBER_OF_ELEVATORS):
-        self.floors = [Floor(i) for i in range(floors)] #how many floors
-        self.elevators = [Elevator(i) for i in range(elevators)] #how many elevators
-        self.elevatorTimes = [0] * elevators  #keeps track of elevator busy times
+    def __init__(self, floors, elevators, canvas):
+        elevator_image, scaled_floor_image, top_floor_image = set_up_images()
+        elevator_initial_y = canvas.get_height() - MARGIN - ELEVATOR_HEIGHT
+        self.floors = [Floor(i, scaled_floor_image) for i in range(floors - 1)]
+        self.floors.append(Floor(floors - 1, top_floor_image))
+        self.elevators = [Elevator(i, elevator_image, elevator_initial_y, self.elevator_arrived_at) for i in
+                          range(elevators)]  # how many elevators
+        self.last_update_time = 0
 
-#maybe the call button should be initialized in a function here instead of in floor.py?
+    def elevator_arrived_at(self, level):
+        self.floors[level].awaiting_elevator = False
+        # self.floors[level]
 
-    def draw(self, screen):
-        floor_img = pygame.image.load(FLOOR_IMG_PATH)
-        floor_image_scaled = pygame.transform.scale(floor_img, (FLOOR_LENGTH, FLOOR_HEIGHT))
-        elevator_img = pygame.image.load(ELEVATOR_IMG_PATH)
-        elevator_image_scaled = pygame.transform.scale(elevator_img, (ELEVATOR_LENGTH, ELEVATOR_HEIGHT))
-        #sets up the floors, stacking one on top of the other
-        for floor in self.floors[:-1]:
-            floor.draw(screen, floor_image_scaled)
-        self.floors[-1].draw(screen, floor_image_scaled, WHITE)
+    def draw(self, canvas):
+        for floor in self.floors:
+            floor.draw(canvas)
         for elevator in self.elevators:
-            elevator.draw(screen, elevator_image_scaled)
+            elevator.draw(canvas)
 
+    def check_calls(self, pos):
+        print("checking calls...")
+        x, y = pos
+        for floor in self.floors:
+            level = floor.button_was_pressed(x, y)
+            if level is not None:
+                self.call_elevator(level)
 
-    def initializeCallButton(self, current_floor):
-        #for every floor in our building, there will be a button to press to call the elevator to that floor.
-        #This function initializes that button.  Maybe this should go in our building class?  Not sure
-        # for floor in self.floors:
-        pass
+    def update(self, canvas):
+        for elevator in self.elevators:
+            elevator.update()
 
-    def update_position(self):
-        pass
+            # when button will turn green we will need to draw the floor here too
 
-    def addToElevatorQueue(self, elevator, min_time, floor_level):
-        Elevator.update_time_when_free(elevator, min_time)
-        Elevator.append_to_queue(elevator, floor_level)
-
-
-    def callElevator(self, floor_level):
+    def call_elevator(self, floor_level):
         # when we click on the button in our app window our elevator is added to our queue.  The elevator that will
         # take the least time to get to our called floor is chosen and will go to this floor when done with its FIFO activity.
         # (needs to be done with pygame, perhaps this function will only be called in main.py?)
-        min_time = pygame.time.get_ticks() + 99999
-        elevator_index = -1
+        called_floor = self.floors[floor_level]
+
+        if called_floor.awaiting_elevator:
+            return
+
+        best_arrival_time = float("inf")
+        best_elevator = self.elevators[0]
+
         for elevator in self.elevators:
-            if elevator.calculateArrivalTime(floor_level) < min_time:
-                min_time = elevator.calculateArrivalTime(floor_level)
-                elevator_index = elevator
-        self.elevatorTimes[elevator_index] = min_time
-        return self.addToElevatorQueue(elevator_index, min_time, floor_level)
 
+            arrival_time = elevator.calculate_arrival_time(floor_level)
 
+            if arrival_time < best_arrival_time:
+                best_arrival_time = arrival_time
+                best_elevator = elevator
 
-    def elevatorOperates(self, elevator):
-        #Removes the floor at the head of the queue and moves to it.
-        #Once we have arrived, ding the elevator once, delay, and move to the next floor
-        #if there is one in the queue.
-        while Elevator.activeQueue:
-            destination = elevator.activeQueue.pop()
-            while destination != elevator.currentFloor:
-                elevator.elevatorMovement()
-                time.sleep(ELEVATOR_MOVEMENT_SPEED/2)
-            elevator.arrivedAtFloor()
+        _, dest_y = called_floor.top_left
+        called_floor.awaiting_elevator = True
+
+        best_elevator.append_to_queue(floor_level, dest_y, best_arrival_time + ELEVATOR_DELAY_TIME)

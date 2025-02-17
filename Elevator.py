@@ -13,87 +13,66 @@ When an elevator arrives at a floor, a given sound (ding.mp3 file) must be playe
 
 from config import *
 
+
 class Elevator:
-    def __init__(self, number=None):
+    def __init__(self, number, image, initial_y_pos, call_back_function):
+        self.building_call_back_function = call_back_function
+        self.image = image
         self.number = number
-        self.currentFloor = 0 #what floor am I on?  updates on every floor
-        self.destinedFloor = None #what floor am i travelling to?
-        self.activeQueue = [] #array of floors I am set to travel to next
-        self.direction = None #am i moving up or down?
-        self.inUse = False
-        self.y = None #Current Y coordinate for the elevator
-        self.timeWhenFree = 0 #what game tick will elevator be free?  Pass along to call elevator function
+        self.destined_floor = 0  # what floor am i travelling to?
+        self.active_q = []  # array of floors I am set to travel to next
+        self.q_pop = False
+        self.direction = None  # am i moving up or down?
+        self.destination_y = initial_y_pos  # updates to Y coordinate of floor we are going to now
+        self.y = initial_y_pos  # Current Y coordinate for the elevator
+        self.time_when_free = 0.0  # what game tick will elevator be free?  Pass along to call elevator function
+        self.position_when_free = 0
+        self.delay_start_time = None
+        self.delaying = False  # Flag for delay status
+        self.busy = False
+        self.at_delay = False
 
-    def draw(self, screen, image):
-        topLeftPixel = (ELEVATOR_START_X + (FLOOR_HEIGHT * self.number), screen.get_height() - MARGIN - FLOOR_HEIGHT)
-        screen.blit(image, topLeftPixel)
+    def draw(self, canvas):
+        top_left = (ELEVATOR_START_X + (ELEVATOR_LENGTH + MARGIN) * self.number, self.y)
+        canvas.blit(self.image, top_left)
 
-        # calc x and y...
-        # use some pygame function and the screen to draw...
-        #calls on the elevator png and places it according to building directions
+    def calculate_arrival_time(self, called_floor):
+        trip_time = abs(called_floor - self.position_when_free) / SINGLE_FLOOR_TRAVEL_TIME
+        return self.time_when_free + trip_time
 
+    def append_to_queue(self, floor, y, arrival_time):
+        self.active_q.append((floor, y))
+        self.position_when_free = floor
+        self.time_when_free = arrival_time
 
-    def calculateArrivalTime(self, called_floor):
-        #Based on our queue, movement speed, and delay,
-        #when will we arrive at any given floor?
-        #should return a new total time for the entire queue
-        if self.activeQueue and self.inUse:
-            last_current_floor = self.activeQueue[-1]
-            potential_arrival_time = self.timeWhenFree + (abs((called_floor - last_current_floor)) / ELEVATOR_MOVEMENT_SPEED)
-        elif not self.activeQueue and self.inUse:
-            potential_arrival_time = self.timeWhenFree + (abs((called_floor - self.destinedFloor)) / ELEVATOR_MOVEMENT_SPEED)
+    def get_next_task(self):
+        if self.active_q:
+            self.destined_floor, self.destination_y = self.active_q.pop(0)
+            self.destination_y += BORDER_PIXEL_WIDTH
+            self.busy = True
+
+    # move up and down
+    def update(self):
+        self.time_when_free = max(self.time_when_free, pygame.time.get_ticks())
+        if self.busy:
+            if self.y != self.destination_y:
+                direction = 1 if self.y <= self.destination_y else -1
+                # Prevent overshooting the destination floor
+                movement_step = direction * min(ELEVATOR_MOVEMENT_SPEED, abs(self.destination_y - self.y))
+                self.y += movement_step
+            else:
+                self.arrived_at_floor()
+        elif self.at_delay:
+            current_time = pygame.time.get_ticks()
+            elapsed_time = (current_time - self.delay_start_time) / 1000
+            if elapsed_time >= 2:
+                self.at_delay = False
         else:
-            potential_arrival_time = self.timeWhenFree + (abs((called_floor - self.currentFloor)) / ELEVATOR_MOVEMENT_SPEED)
-        return potential_arrival_time
+            self.get_next_task()
 
-    def update_time_when_free(self, min_time):
-        self.timeWhenFree = min_time
-
-    def append_to_queue(self, floor):
-        self.activeQueue.append(floor)
-
-#move up and down
-    def elevatorMovement(self):
-    #     if self.currentFloor < self.destinedFloor:
-    #         self.currentFloor += 1
-    #     if self.currentFloor > self.destinedFloor:
-    #         self.currentFloor -= 1
-        pass
-
-    def elevatorDelay(self):
-        # When the elevator arrives at a floor, it will delay for 2 seconds before
-        # proceeding to the next queued floor
-        time.sleep(ELEVATOR_DELAY_TIME)
-
-
-    def elevatorDing(self):
-        #pygame has an audio mixer module, use that
-        #
-        pass
-
-
-    def arrivedAtFloor(self):
-            self.elevatorDing()
-            self.elevatorDelay()
-
-            # maybe this part should be done by a building function instead?
-
-            # if self.activeQueue:
-            #     self.destinedFloor = self.activeQueue.pop()
-            #     self.elevatorMovement()
-
-# ron = Elevator(1)
-# ron.elevatorDing()
-
-
-    def calculateArrivalTime(self):
-        #Based on our queue, movement speed, and delay,
-        #when will we arrive at any given floor?
-        #should return a new total time for the entire queue
-        total_busy_time = 0
-        for i in range(len(self.activeQueue)):
-            next_current_floor = self.activeQueue[i+1]
-            next_time_to_arrival = abs(((self.activeQueue[i] - next_current_floor) * ELEVATOR_MOVEMENT_SPEED))
-            total_busy_time += next_time_to_arrival + ELEVATOR_DELAY_TIME
-        self.busyTime = total_busy_time
-        return self.busyTime
+    def arrived_at_floor(self):
+        pygame.mixer.music.play()  # Play the ding sound when the elevator arrives
+        self.building_call_back_function(self.destined_floor)
+        self.busy = False
+        self.at_delay = True
+        self.delay_start_time = pygame.time.get_ticks()
